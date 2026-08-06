@@ -179,7 +179,84 @@ else
     fi
 fi
 
-# ── 6. Ruflo / claude-flow MCP ───────────────────────────────────────────────
+# ── 6. Headroom ───────────────────────────────────────────────────────────────
+
+info "Checking Headroom..."
+
+install_headroom() {
+    local INSTALL_DIR="$HOME/.local/bin"
+    mkdir -p "$INSTALL_DIR"
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)  ARCH="x86_64" ;;
+        aarch64|arm64) ARCH="aarch64" ;;
+        *) warn "Unsupported architecture: $ARCH"; return 1 ;;
+    esac
+    RELEASE_URL="https://github.com/headroomlabs-ai/headroom/releases/latest/download/headroom-${OS}-${ARCH}"
+    echo "  Downloading Headroom from GitHub releases..."
+    if curl -fsSL "$RELEASE_URL" -o "$INSTALL_DIR/headroom"; then
+        chmod +x "$INSTALL_DIR/headroom"
+        ok "Headroom installed to $INSTALL_DIR/headroom ($(headroom version 2>/dev/null || headroom --version 2>/dev/null))"
+    else
+        warn "Download failed. Install manually from: https://github.com/headroomlabs-ai/headroom"
+        return 1
+    fi
+}
+
+if command -v headroom >/dev/null 2>&1; then
+    ok "Headroom $(headroom version 2>/dev/null || headroom --version 2>/dev/null)"
+else
+    warn "Headroom not found."
+    echo "  Headroom is a local proxy that lets you switch between Anthropic and DeepSeek."
+    echo "  Source: https://github.com/headroomlabs-ai/headroom"
+    echo ""
+    ask "Install Headroom now? (Y/n)"
+    read -rp "  " INSTALL_HEADROOM
+    if [[ ! "$INSTALL_HEADROOM" =~ ^[Nn]$ ]]; then
+        install_headroom || warn "Headroom install failed — you can retry later."
+    else
+        warn "Skipping Headroom. Install later from: https://github.com/headroomlabs-ai/headroom"
+    fi
+fi
+
+# ── 7. DeepSeek API Key ───────────────────────────────────────────────────────
+
+info "Checking DeepSeek API key..."
+
+DEEPSEEK_ENV="$CLAUDE_DIR/deepseek_env"
+
+if [ -f "$DEEPSEEK_ENV" ] && [ -s "$DEEPSEEK_ENV" ]; then
+    ok "DeepSeek credentials file found"
+else
+    echo "  DeepSeek lets you run Claude Code against DeepSeek models (much cheaper)."
+    echo "  Get a key at: https://platform.deepseek.com"
+    echo ""
+    ask "Do you have a DeepSeek API key to configure now? (y/N)"
+    read -rp "  " USE_DEEPSEEK
+    if [[ "$USE_DEEPSEEK" =~ ^[Yy]$ ]]; then
+        ask "Paste your DeepSeek API key (starts with sk-...):"
+        read -rsp "  " DEEPSEEK_KEY_INPUT
+        echo ""
+        if [ -n "$DEEPSEEK_KEY_INPUT" ]; then
+            mkdir -p "$CLAUDE_DIR" && chmod 700 "$CLAUDE_DIR"
+            ( umask 077 && printf 'export DEEPSEEK_API_KEY=%q\n' "$DEEPSEEK_KEY_INPUT" > "$DEEPSEEK_ENV" )
+            chmod 600 "$DEEPSEEK_ENV"
+            ok "DEEPSEEK_API_KEY written to $DEEPSEEK_ENV (owner-only, 600)"
+            if ! grep -q "deepseek_env" "$HOME/.zshrc" 2>/dev/null; then
+                echo "" >> "$HOME/.zshrc"
+                echo '[ -f "$HOME/.claude/deepseek_env" ] && source "$HOME/.claude/deepseek_env"' >> "$HOME/.zshrc"
+                ok "Added deepseek_env source line to ~/.zshrc"
+            fi
+        else
+            warn "No key entered — skipping."
+        fi
+    else
+        warn "Skipping DeepSeek key. Add it later to ~/.claude/deepseek_env"
+    fi
+fi
+
+# ── 8. Ruflo / claude-flow MCP ───────────────────────────────────────────────
 
 info "Setting up Ruflo MCP server..."
 
@@ -195,7 +272,7 @@ else
     ok "~/.mcp.json created with ruflo MCP server"
 fi
 
-# ── 7. settings.json ─────────────────────────────────────────────────────────
+# ── 9. settings.json ─────────────────────────────────────────────────────────
 
 info "Configuring ~/.claude/settings.json..."
 
@@ -207,8 +284,10 @@ if [ -f "$CLAUDE_DIR/settings.json" ]; then
 fi
 cp "$SCRIPT_DIR/config/settings.json" "$CLAUDE_DIR/settings.json"
 ok "settings.json installed"
+cp "$SCRIPT_DIR/config/settings.local.json" "$CLAUDE_DIR/settings.local.json"
+ok "settings.local.json installed (headroom proxy on 127.0.0.1:8787)"
 
-# ── 8. CLAUDE.md ─────────────────────────────────────────────────────────────
+# ── 10. CLAUDE.md ─────────────────────────────────────────────────────────────
 
 info "Setting up ~/.claude/CLAUDE.md..."
 
@@ -219,7 +298,7 @@ else
     ok "CLAUDE.md installed"
 fi
 
-# ── 9. RTK.md + project-workflow.md ─────────────────────────────────────────
+# ── 11. RTK.md + project-workflow.md ─────────────────────────────────────────
 
 cp "$SCRIPT_DIR/config/RTK.md" "$CLAUDE_DIR/RTK.md"
 ok "RTK.md installed"
@@ -227,7 +306,7 @@ ok "RTK.md installed"
 cp "$SCRIPT_DIR/docs/project-workflow.md" "$CLAUDE_DIR/project-workflow.md"
 ok "project-workflow.md installed"
 
-# ── 10. Shell aliases ────────────────────────────────────────────────────────
+# ── 12. Shell aliases ────────────────────────────────────────────────────────
 
 info "Checking shell aliases..."
 
@@ -245,7 +324,7 @@ else
     fi
 fi
 
-# ── 11. Summary ──────────────────────────────────────────────────────────────
+# ── 13. Summary ──────────────────────────────────────────────────────────────
 
 echo ""
 echo -e "${BOLD}Setup complete!${NC}"
