@@ -83,14 +83,18 @@ if [ "$API_KEY_SET" = false ]; then
         read -rsp "  " ANTHROPIC_API_KEY_INPUT
         echo ""
         if [ -n "$ANTHROPIC_API_KEY_INPUT" ]; then
-            # Persist to shell profile
+            # Write to a dedicated secrets file (600) — not ~/.zshrc which is world-readable
+            SECRETS_FILE="$CLAUDE_DIR/anthropic_env"
+            mkdir -p "$CLAUDE_DIR" && chmod 700 "$CLAUDE_DIR"
+            ( umask 077 && printf 'export ANTHROPIC_API_KEY=%q\n' "$ANTHROPIC_API_KEY_INPUT" > "$SECRETS_FILE" )
+            chmod 600 "$SECRETS_FILE"
+            ok "ANTHROPIC_API_KEY written to $SECRETS_FILE (owner-only, 600)"
+            # Source it from ~/.zshrc if not already wired up
             PROFILE_FILE="$HOME/.zshrc"
-            if ! grep -q "ANTHROPIC_API_KEY" "$PROFILE_FILE" 2>/dev/null; then
+            if ! grep -q "anthropic_env" "$PROFILE_FILE" 2>/dev/null; then
                 echo "" >> "$PROFILE_FILE"
-                echo "export ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY_INPUT\"" >> "$PROFILE_FILE"
-                ok "ANTHROPIC_API_KEY added to ~/.zshrc"
-            else
-                warn "ANTHROPIC_API_KEY already in ~/.zshrc — not overwriting. Update it manually if needed."
+                echo '[ -f "$HOME/.claude/anthropic_env" ] && source "$HOME/.claude/anthropic_env"' >> "$PROFILE_FILE"
+                ok "Added anthropic_env source line to ~/.zshrc"
             fi
             export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_INPUT"
         else
