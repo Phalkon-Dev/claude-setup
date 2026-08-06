@@ -7,6 +7,10 @@ set -e
 
 CLAUDE_DIR="$HOME/.claude"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_TYPE=""      # set during shell detection step
+PROFILE_FILE=""    # ~/.zshrc or ~/.bashrc
+ALIASES_FILE=""    # ~/.zsh_aliases or ~/.bash_aliases
+ALIASES_SRC=""     # path to the right aliases file in this repo
 
 BOLD='\033[1m'
 DIM='\033[2m'
@@ -58,6 +62,64 @@ echo "  Nothing is installed without your confirmation."
 echo "  You can skip any optional component and add it later."
 echo ""
 read -rp "  Press Enter to begin, or Ctrl+C to cancel: "
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  SHELL DETECTION
+# ═══════════════════════════════════════════════════════════════════
+
+section "Shell Detection"
+
+echo "  This setup installs shell aliases and modifies your shell config file."
+echo "  It needs to know which shell you use so it edits the right files:"
+echo ""
+echo "    zsh  → config: ~/.zshrc   | aliases: ~/.zsh_aliases"
+echo "    bash → config: ~/.bashrc  | aliases: ~/.bash_aliases"
+echo ""
+
+DETECTED=$(basename "$SHELL" 2>/dev/null || echo "unknown")
+
+if [[ "$DETECTED" == "zsh" || "$DETECTED" == "bash" ]]; then
+    echo "  Detected login shell: $DETECTED"
+    echo ""
+    prompt "Is $DETECTED your shell? (Y/n)"
+    read -rp "  → " CONFIRM_SHELL
+    if [[ "$CONFIRM_SHELL" =~ ^[Nn]$ ]]; then
+        DETECTED=""
+    fi
+fi
+
+if [[ -z "$DETECTED" || ( "$DETECTED" != "zsh" && "$DETECTED" != "bash" ) ]]; then
+    echo "  Could not detect your shell automatically."
+    echo ""
+    prompt "Which shell do you use? Enter 1 or 2:"
+    echo "    1) zsh   (default on macOS, common on Ubuntu 20.04+)"
+    echo "    2) bash  (default on most Linux systems)"
+    echo ""
+    read -rp "  → " SHELL_CHOICE
+    case "$SHELL_CHOICE" in
+        1) DETECTED="zsh" ;;
+        2) DETECTED="bash" ;;
+        *) fail "Invalid choice. Please re-run the script and enter 1 or 2." ;;
+    esac
+fi
+
+SHELL_TYPE="$DETECTED"
+
+case "$SHELL_TYPE" in
+    zsh)
+        PROFILE_FILE="$HOME/.zshrc"
+        ALIASES_FILE="$HOME/.zsh_aliases"
+        ALIASES_SRC="$SCRIPT_DIR/zsh/aliases.zsh"
+        ;;
+    bash)
+        PROFILE_FILE="$HOME/.bashrc"
+        ALIASES_FILE="$HOME/.bash_aliases"
+        ALIASES_SRC="$SCRIPT_DIR/bash/aliases.bash"
+        ;;
+esac
+
+ok "Shell: $SHELL_TYPE | Config: $PROFILE_FILE | Aliases: $ALIASES_FILE"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -128,7 +190,7 @@ echo "      For users who pay per-use via the API (console.anthropic.com)."
 echo "      The key starts with 'sk-ant-...' and is found in your API settings."
 echo ""
 note "Your key will be stored in ~/.claude/anthropic_env with owner-only (600)"
-note "permissions. It will NOT be written to ~/.zshrc or any world-readable file."
+note "permissions. It will NOT be written to $PROFILE_FILE or any world-readable file."
 echo ""
 
 CREDS_FILE="$HOME/.claude/.credentials.json"
@@ -157,10 +219,10 @@ if [ "$API_KEY_SET" = false ]; then
             ( umask 077 && printf 'export ANTHROPIC_API_KEY=%q\n' "$ANTHROPIC_API_KEY_INPUT" > "$SECRETS_FILE" )
             chmod 600 "$SECRETS_FILE"
             ok "Key saved to $SECRETS_FILE (permissions: 600, visible only to you)"
-            if ! grep -q "anthropic_env" "$HOME/.zshrc" 2>/dev/null; then
-                echo "" >> "$HOME/.zshrc"
-                echo '[ -f "$HOME/.claude/anthropic_env" ] && source "$HOME/.claude/anthropic_env"' >> "$HOME/.zshrc"
-                ok "Added loader line to ~/.zshrc — key available in every new shell"
+            if ! grep -q "anthropic_env" "$PROFILE_FILE" 2>/dev/null; then
+                echo "" >> "$PROFILE_FILE"
+                echo '[ -f "$HOME/.claude/anthropic_env" ] && source "$HOME/.claude/anthropic_env"' >> "$PROFILE_FILE"
+                ok "Added loader line to $PROFILE_FILE — key available in every new shell"
             fi
             export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY_INPUT"
         else
@@ -250,10 +312,10 @@ install_rtk() {
             -o "$INSTALL_DIR/rtk"; then
         chmod +x "$INSTALL_DIR/rtk"
         if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
-            echo "" >> "$HOME/.zshrc"
-            echo 'export PATH="$PATH:$HOME/.local/bin"' >> "$HOME/.zshrc"
+            echo "" >> "$PROFILE_FILE"
+            echo 'export PATH="$PATH:$HOME/.local/bin"' >> "$PROFILE_FILE"
             export PATH="$PATH:$INSTALL_DIR"
-            ok "Added ~/.local/bin to PATH in ~/.zshrc"
+            ok "Added ~/.local/bin to PATH in $PROFILE_FILE"
         fi
         ok "RTK installed — $(rtk --version 2>/dev/null || echo 'version unknown')"
     else
@@ -378,10 +440,10 @@ else
             ( umask 077 && printf 'export DEEPSEEK_API_KEY=%q\n' "$DEEPSEEK_KEY_INPUT" > "$DEEPSEEK_ENV" )
             chmod 600 "$DEEPSEEK_ENV"
             ok "Key saved to $DEEPSEEK_ENV (permissions: 600, visible only to you)"
-            if ! grep -q "deepseek_env" "$HOME/.zshrc" 2>/dev/null; then
-                echo "" >> "$HOME/.zshrc"
-                echo '[ -f "$HOME/.claude/deepseek_env" ] && source "$HOME/.claude/deepseek_env"' >> "$HOME/.zshrc"
-                ok "Added loader line to ~/.zshrc — key available in every new shell"
+            if ! grep -q "deepseek_env" "$PROFILE_FILE" 2>/dev/null; then
+                echo "" >> "$PROFILE_FILE"
+                echo '[ -f "$HOME/.claude/deepseek_env" ] && source "$HOME/.claude/deepseek_env"' >> "$PROFILE_FILE"
+                ok "Added loader line to $PROFILE_FILE — key available in every new shell"
             fi
         else
             warn "Nothing entered — skipping."
@@ -575,7 +637,7 @@ ok "project-workflow.md installed"
 
 section "Step 12 of 13 — Shell Aliases"
 
-echo "  A set of productivity aliases for your zsh shell, covering:"
+echo "  A set of productivity aliases for your $SHELL_TYPE shell, covering:"
 echo ""
 echo "    • git shortcuts     (gst, gp, gpl, gc, gcb, gl, gs…)"
 echo "    • Python / venv     (a = activate, d = deactivate, create-venv…)"
@@ -591,23 +653,31 @@ echo "    claude-default-continue → same, resumes your last session"
 echo "    claude-deepseek         → Claude Code via DeepSeek API (cheaper)"
 echo "    claude-deepseek-continue→ same, resumes your last session"
 echo ""
-note "If ~/.zsh_aliases already exists it will NOT be overwritten."
-note "Aliases will be written to: ~/.zsh_aliases"
-note "A 'source ~/.zsh_aliases' line will be added to ~/.zshrc if not present."
+note "If $ALIASES_FILE already exists it will NOT be overwritten."
+note "Aliases will be written to: $ALIASES_FILE"
 echo ""
 
-ALIASES_FILE="$HOME/.zsh_aliases"
 if [ -f "$ALIASES_FILE" ]; then
-    warn "~/.zsh_aliases already exists — skipping to avoid overwriting your aliases."
-    note "Review $SCRIPT_DIR/zsh/aliases.zsh and add the lines you want manually."
+    warn "$ALIASES_FILE already exists — skipping to avoid overwriting your aliases."
+    note "Review $ALIASES_SRC and add the lines you want manually."
 else
-    action "Writing ~/.zsh_aliases..."
-    cp "$SCRIPT_DIR/zsh/aliases.zsh" "$ALIASES_FILE"
-    ok "~/.zsh_aliases installed"
-    if ! grep -q "source.*\.zsh_aliases" "$HOME/.zshrc" 2>/dev/null; then
-        echo "" >> "$HOME/.zshrc"
-        echo "source ~/.zsh_aliases" >> "$HOME/.zshrc"
-        ok "Added 'source ~/.zsh_aliases' to ~/.zshrc"
+    action "Writing $ALIASES_FILE..."
+    cp "$ALIASES_SRC" "$ALIASES_FILE"
+    ok "$ALIASES_FILE installed"
+    if [[ "$SHELL_TYPE" == "zsh" ]]; then
+        if ! grep -q "zsh_aliases" "$PROFILE_FILE" 2>/dev/null; then
+            echo "" >> "$PROFILE_FILE"
+            echo "source ~/.zsh_aliases" >> "$PROFILE_FILE"
+            ok "Added 'source ~/.zsh_aliases' to $PROFILE_FILE"
+        fi
+    else
+        if ! grep -q "bash_aliases" "$PROFILE_FILE" 2>/dev/null; then
+            echo "" >> "$PROFILE_FILE"
+            echo '[ -f "$HOME/.bash_aliases" ] && source "$HOME/.bash_aliases"' >> "$PROFILE_FILE"
+            ok "Added bash_aliases loader to $PROFILE_FILE"
+        else
+            ok "bash_aliases already sourced in $PROFILE_FILE"
+        fi
     fi
 fi
 
@@ -622,7 +692,7 @@ echo -e "${GREEN}${BOLD}  All done! Here's what to do next:${NC}"
 echo ""
 echo "  ① Reload your shell to activate the new aliases and PATH changes:"
 echo ""
-echo "       source ~/.zshrc"
+echo "       source $PROFILE_FILE"
 echo ""
 echo "  ② Launch Claude Code for the first time:"
 echo ""
