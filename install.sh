@@ -133,36 +133,49 @@ fi
 
 info "Checking RTK..."
 
+install_rtk() {
+    local INSTALL_DIR="$HOME/.local/bin"
+    mkdir -p "$INSTALL_DIR"
+
+    # Detect OS/arch for the right release asset
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)  ARCH="x86_64" ;;
+        aarch64|arm64) ARCH="aarch64" ;;
+        *) warn "Unsupported architecture: $ARCH"; return 1 ;;
+    esac
+
+    RELEASE_URL="https://github.com/rtk-ai/rtk/releases/latest/download/rtk-${OS}-${ARCH}"
+    echo "  Downloading RTK from GitHub releases..."
+    if curl -fsSL "$RELEASE_URL" -o "$INSTALL_DIR/rtk"; then
+        chmod +x "$INSTALL_DIR/rtk"
+        if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
+            echo "" >> "$HOME/.zshrc"
+            echo 'export PATH="$PATH:$HOME/.local/bin"' >> "$HOME/.zshrc"
+            export PATH="$PATH:$INSTALL_DIR"
+            ok "Added ~/.local/bin to PATH in ~/.zshrc"
+        fi
+        ok "RTK installed to $INSTALL_DIR/rtk ($(rtk --version 2>/dev/null))"
+    else
+        warn "Download failed. Install manually from: https://github.com/rtk-ai/rtk"
+        return 1
+    fi
+}
+
 if command -v rtk >/dev/null 2>&1; then
     ok "RTK $(rtk --version 2>/dev/null)"
 else
     warn "RTK not found."
     echo "  RTK rewrites bash commands to save 60-90% tokens per Claude session."
-    echo "  It is a compiled Rust binary — install it and place it at ~/.local/bin/rtk"
-    echo "  Once in PATH, the PreToolUse hook in settings.json activates automatically."
+    echo "  Source: https://github.com/rtk-ai/rtk"
     echo ""
-    ask "Do you have the RTK binary file to install now? (y/N)"
+    ask "Install RTK now? (Y/n)"
     read -rp "  " INSTALL_RTK
-    if [[ "$INSTALL_RTK" =~ ^[Yy]$ ]]; then
-        ask "Full path to the rtk binary:"
-        read -rp "  " RTK_PATH
-        if [ -f "$RTK_PATH" ]; then
-            mkdir -p "$HOME/.local/bin"
-            cp "$RTK_PATH" "$HOME/.local/bin/rtk"
-            chmod +x "$HOME/.local/bin/rtk"
-            # Ensure ~/.local/bin is in PATH
-            if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-                echo "" >> "$HOME/.zshrc"
-                echo 'export PATH="$PATH:$HOME/.local/bin"' >> "$HOME/.zshrc"
-                export PATH="$PATH:$HOME/.local/bin"
-                ok "Added ~/.local/bin to PATH in ~/.zshrc"
-            fi
-            ok "RTK installed to ~/.local/bin/rtk"
-        else
-            warn "File not found: $RTK_PATH — skipping RTK install."
-        fi
+    if [[ ! "$INSTALL_RTK" =~ ^[Nn]$ ]]; then
+        install_rtk || warn "RTK install failed — you can retry later."
     else
-        warn "Skipping RTK install. Add it later to ~/.local/bin/rtk"
+        warn "Skipping RTK. Install later from: https://github.com/rtk-ai/rtk"
     fi
 fi
 
