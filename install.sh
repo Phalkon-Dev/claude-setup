@@ -619,16 +619,38 @@ echo "  project-workflow.md — the full Phalkon project lifecycle guide:"
 echo "    repo creation from templates, docs structure, session protocols,"
 echo "    template sync workflow, and all GSD slash commands."
 echo ""
+note "If these files already exist you will be asked before overwriting."
 note "Files written to: ~/.claude/RTK.md and ~/.claude/project-workflow.md"
 echo ""
 
-action "Writing RTK.md..."
-cp "$SCRIPT_DIR/config/RTK.md" "$CLAUDE_DIR/RTK.md"
-ok "RTK.md installed"
+install_ref_doc() {
+    local SRC="$1"
+    local DEST="$2"
+    local LABEL="$3"
+    if [ -f "$DEST" ]; then
+        warn "$DEST already exists."
+        echo "  This file may have been customized. Overwriting replaces it with the"
+        echo "  latest version from the Phalkon setup repo."
+        echo ""
+        prompt "Overwrite $LABEL? (Y/n)"
+        read -rp "  → " OVR
+        if [[ ! "$OVR" =~ ^[Nn]$ ]]; then
+            cp "$DEST" "${DEST}.bak"
+            ok "Backup saved to ${DEST}.bak"
+            cp "$SRC" "$DEST"
+            ok "$LABEL updated"
+        else
+            warn "Skipping $LABEL — existing file kept."
+        fi
+    else
+        action "Writing $LABEL..."
+        cp "$SRC" "$DEST"
+        ok "$LABEL installed"
+    fi
+}
 
-action "Writing project-workflow.md..."
-cp "$SCRIPT_DIR/docs/project-workflow.md" "$CLAUDE_DIR/project-workflow.md"
-ok "project-workflow.md installed"
+install_ref_doc "$SCRIPT_DIR/config/RTK.md" "$CLAUDE_DIR/RTK.md" "RTK.md"
+install_ref_doc "$SCRIPT_DIR/docs/project-workflow.md" "$CLAUDE_DIR/project-workflow.md" "project-workflow.md"
 
 
 # ═══════════════════════════════════════════════════════════════════
