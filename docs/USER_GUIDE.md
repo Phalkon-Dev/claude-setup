@@ -1,0 +1,378 @@
+# Claude Code Power User Guide
+
+> Everything installed by this setup, explained — what each tool does, when to use it, and why.
+
+---
+
+## How It All Fits Together
+
+When you run `claude-default` or `claude-deepseek`, this is what happens:
+
+```
+You
+ └─▶ Shell alias (claude-default / claude-deepseek)
+       └─▶ Headroom proxy (127.0.0.1:8787)
+             └─▶ AI provider (Anthropic or DeepSeek)
+                   └─▶ Claude Code session
+                         ├─▶ RTK hook       (every bash command, automatic)
+                         ├─▶ GSD hooks      (context monitor + status line)
+                         ├─▶ Ruflo MCP      (memory, multi-agent, hooks)
+                         └─▶ Plugins        (invoked via /commands)
+```
+
+None of this requires you to do anything differently from a normal Claude session — it all runs in the background. The only active choice you make is **which alias to launch with**.
+
+---
+
+## 1. Launching Claude Code — The Aliases
+
+These are your entry points. Open a terminal and type one of these instead of `claude`.
+
+| Alias | Provider | When to use |
+|-------|----------|-------------|
+| `claude-default` | Anthropic | Your main daily driver. Full Claude quality. |
+| `claude-default-continue` | Anthropic | Resume where your last session left off. |
+| `claude-deepseek` | DeepSeek | Cheaper tasks that don't need full quality. |
+| `claude-deepseek-continue` | DeepSeek | Resume last session on DeepSeek. |
+
+### When to use DeepSeek (`claude-deepseek`)
+
+Use DeepSeek when the task is mechanical and you don't need Claude's full reasoning:
+
+- Generating boilerplate (CRUD endpoints, form components, migrations)
+- Writing or updating documentation
+- Simple refactors (rename variables, extract functions)
+- Formatting / linting fixes
+- Translating code between similar languages
+
+Use Anthropic (`claude-default`) when the task requires judgment:
+
+- Architecture decisions
+- Debugging complex logic
+- Security review
+- Anything that needs careful reasoning or creative problem-solving
+
+### What `...-continue` does
+
+The `-continue` variants pass the `-c` flag to Claude Code, which resumes your previous conversation in that directory. Use it when you're picking up a task you left mid-session.
+
+---
+
+## 2. RTK — Rust Token Killer
+
+RTK runs **automatically** on every bash command Claude executes. You don't invoke it — it's a background hook.
+
+### What it does
+
+Every time Claude runs a command like `git log` or `ls -la`, the raw terminal output gets sent back to Claude as tokens. RTK intercepts that output and strips everything that isn't useful: decorations, padding, blank lines, progress bars. This cuts token usage by **60–90%** per command, which means longer sessions before hitting limits, and lower API costs.
+
+### Manual commands
+
+Use these directly in your terminal (outside of Claude):
+
+```bash
+rtk gain                # Show total tokens saved across all sessions
+rtk gain --history      # Show savings broken down by command and date
+rtk discover            # Analyze your Claude history for missed savings opportunities
+rtk proxy <command>     # Run a command through RTK manually (for debugging)
+```
+
+Run `rtk gain` after a heavy coding session — the savings are usually significant.
+
+### One caveat
+
+RTK filters output before Claude sees it. If Claude seems to be missing context from a command's output, you can run the command with `rtk proxy` disabled temporarily:
+
+```bash
+# inside a Claude session, if a command isn't giving Claude enough context:
+# ask Claude to run: rtk proxy git log --oneline -20
+```
+
+---
+
+## 3. Headroom — AI Provider Proxy
+
+Headroom runs silently as a local proxy. `settings.local.json` points all Claude Code traffic through it at `127.0.0.1:8787`. You don't interact with Headroom directly — the aliases handle it.
+
+### What it gives you
+
+**Provider switching** — one alias changes where your API calls go. No config editing, no env var juggling.
+
+**Usage analytics** — Headroom tracks every session's token usage and cost.
+
+### If Headroom isn't running
+
+If you see API connection errors after running a `claude-*` alias, Headroom may have crashed. The aliases start it automatically via `headroom wrap`, but if something goes wrong:
+
+```bash
+headroom version        # check it's installed
+headroom wrap claude    # start manually (same as the alias does)
+```
+
+---
+
+## 4. GSD — Get Shit Done Workflow
+
+GSD adds structured project management slash commands to Claude Code. Type these inside a Claude session.
+
+### Starting a new project
+
+```
+/gsd:new-project
+```
+Use this at the very beginning of a new repo. GSD will interview you about what you're building, then generate a phased roadmap in `docs/planning.md` and a task backlog in `docs/tasks.md`. Takes about 5 minutes but saves hours of drift later.
+
+### Planning and executing work
+
+```
+/gsd:plan-phase
+```
+Use before tackling a significant feature or milestone. GSD breaks it into concrete tasks, identifies files to touch, and flags dependencies. Creates a plan you review before anything gets built.
+
+```
+/gsd:execute-phase
+```
+Runs the plan created by `/gsd:plan-phase`. Claude works through the tasks in order, checking each one off. Use this for planned milestones, not quick one-off fixes.
+
+### Tracking and checking in
+
+```
+/gsd:progress           Show current milestone status and what's left
+/gsd:check-todos        List all open tasks from docs/tasks.md
+/gsd:health             Full project health check (tests, coverage, TODOs, docs)
+```
+
+### Debugging
+
+```
+/gsd:debug
+```
+Structured debugging session. GSD applies a scientific method: reproduces the bug, forms hypotheses, tests them in order, and documents what it found. More systematic than asking Claude to "fix this bug."
+
+### Other useful commands
+
+```
+/gsd:add-tests          Generate tests for a feature you just built
+/gsd:map-codebase       Index the codebase (run at the start of sessions on large repos)
+```
+
+### When NOT to use GSD commands
+
+GSD is for structured, multi-step work. For quick one-liners, just talk to Claude normally:
+
+- "Fix this typo" → just say it
+- "Explain what this function does" → just ask
+- "Add a console.log here" → just ask
+
+GSD adds overhead that's only worth it for tasks with multiple steps or moving parts.
+
+---
+
+## 5. Plugins
+
+Plugins are invoked inside Claude Code via slash commands. Most activate automatically when relevant — you don't need to explicitly call them unless you want to trigger a specific workflow.
+
+### Code quality
+
+**`/code-review`** — Full code review of recent changes. Run before opening a PR.
+Use when: you've finished a feature and want Claude to check for bugs, security issues, and style problems.
+
+**`/pr-review-toolkit`** — Suite of specialized reviewers:
+- Reviews type design, test coverage, silent failures, and comment accuracy
+- Use when: doing a thorough pre-merge review
+
+**`/simplify`** — Simplifies code you just wrote — removes duplication, improves readability.
+Use when: you feel like the code works but is messier than it should be.
+
+### Building features
+
+**`/feature-dev`** — End-to-end feature implementation with planning, coding, and testing.
+Use when: building something non-trivial that spans multiple files.
+
+**`/frontend-design`** — UI component guidance following the Phalkon design system.
+Use when: building any React component — ensures correct token usage, shadcn patterns, and Lucide icons.
+
+### Git and PRs
+
+**`/commit`** — Generates a conventional commit message from your staged changes.
+Use when: you're ready to commit and want a clean, consistent message.
+
+**`/commit-push-pr`** — Commits, pushes, and opens a PR in one go.
+Use when: you're done with a feature and want to ship it quickly.
+
+### Testing
+
+**`/gsd:add-tests`** — Generates tests for code you just wrote.
+Use when: you built something and haven't written tests yet.
+
+### Memory
+
+**`/remember`** — Saves something to Claude's persistent memory.
+Use when: you want Claude to remember a preference, rule, or fact across all future sessions.
+
+Example: `/remember Always use uv instead of pip for Python package management in this project.`
+
+**`/mem-search`** (claude-mem) — Searches past conversation history semantically.
+Use when: you know you discussed something in a previous session but can't remember exactly what.
+
+### Browser automation
+
+**Playwright plugin** — Activated automatically when Claude needs to interact with a browser.
+Use when: testing UI flows, scraping, or automating web interactions. Just describe what you want Claude to do in the browser.
+
+### Integrations
+
+**`/atlassian`** — Jira/Confluence integration.
+Use when: you want Claude to create Jira tickets, update issue status, or write to Confluence from a session.
+
+**`/circleback`** — Paste meeting notes and Claude turns them into Jira tickets and Confluence docs.
+Use when: after a meeting where tasks were discussed.
+
+---
+
+## 6. Ruflo / claude-flow — Multi-Agent Orchestration
+
+Ruflo is the MCP server that powers multi-agent workflows. You don't interact with it directly — Claude uses it when spawning sub-agents or storing memory.
+
+### When Claude uses it automatically
+
+- When you ask Claude to do something large enough that it spawns helper agents
+- When Claude saves or recalls session memory between conversations
+- When the GSD hooks fire (context monitoring, status line updates)
+
+### When to ask Claude to use it explicitly
+
+For large tasks, you can ask Claude to parallelize work:
+
+> "Use multiple agents to research the codebase in parallel — one for the frontend, one for the backend — then combine the findings."
+
+> "Spawn an agent to write tests while you implement the feature."
+
+Claude will coordinate the agents and report back when done.
+
+### Memory
+
+Ruflo provides persistent vector memory across sessions. Claude automatically stores and retrieves relevant context. If Claude seems to have forgotten something from a previous session, try:
+
+> "Search your memory for what we decided about [topic]."
+
+---
+
+## 7. Shell Aliases — Quick Reference
+
+### Git
+
+```bash
+gst          git status
+ga .         git add .
+gc "message" git commit -m "message"
+gp           git push
+gpl          git pull
+gcb name     git checkout -b name   (new branch)
+gco name     git checkout name
+gl           git log --oneline --graph
+gd           git diff
+gs           git stash
+gsp          git stash pop
+```
+
+### Python / virtualenv
+
+```bash
+create-venv  python3 -m venv .venv
+a            source .venv/bin/activate
+d            deactivate
+pip-install  pip install -r requirements.txt
+```
+
+### Docker
+
+```bash
+dps          docker ps
+dcup         docker-compose up -d
+dcdown       docker-compose down
+dclogs       docker-compose logs -f
+dex name sh  docker exec -it name sh
+```
+
+### System
+
+```bash
+ll           ls -alF  (detailed listing)
+listen       show all listening ports
+myip         show your public IP
+genpass      generate a random password
+http-server  start a local HTTP server in current directory
+```
+
+---
+
+## 8. Common Workflows
+
+### Starting your day on an existing project
+
+```bash
+cd ~/dev/Phalkon-Dev/my-project
+claude-default-continue          # resume where you left off
+# inside Claude:
+/gsd:check-todos                 # see what's pending
+/gsd:progress                    # see milestone status
+```
+
+### Starting a brand new project
+
+```bash
+cd ~/dev/Phalkon-Dev
+git clone git@github.com:Phalkon-Dev/ui-app-template.git my-project-ui
+cd my-project-ui
+claude-default
+# inside Claude:
+/gsd:new-project                 # build the roadmap
+```
+
+### Tackling a feature
+
+```bash
+claude-default
+# inside Claude:
+/gsd:plan-phase                  # plan the milestone
+# review the plan, then:
+/gsd:execute-phase               # build it
+# when done:
+/commit-push-pr                  # ship it
+```
+
+### Cost-saving session (docs, boilerplate, simple tasks)
+
+```bash
+claude-deepseek                  # cheaper provider
+# work normally — same interface, lower cost
+```
+
+### Debugging something tricky
+
+```bash
+claude-default                   # use full Anthropic quality
+# inside Claude:
+/gsd:debug                       # structured debug session
+```
+
+### After a meeting
+
+```bash
+claude-default
+# inside Claude:
+/circleback                      # paste meeting notes → Jira tickets + Confluence
+```
+
+---
+
+## 9. Tips
+
+**Context window** — The GSD status line at the bottom shows context usage. When it hits ~75%, start a new session with `-continue` to avoid running out mid-task.
+
+**DeepSeek for first drafts, Anthropic for review** — A common pattern: use `claude-deepseek` to generate a first draft of a feature, then switch to `claude-default` to review and refine it.
+
+**Check token savings weekly** — Run `rtk gain --history` on Fridays to see how much RTK saved that week. It's a good way to validate the setup is working.
+
+**Memory is per-machine** — Claude's memory (via Ruflo and `/remember`) is stored locally. If you move to a new machine, re-run the setup but note that conversation history and saved memories won't carry over.
