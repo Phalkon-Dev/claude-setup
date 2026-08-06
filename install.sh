@@ -455,25 +455,56 @@ echo "    • ANTHROPIC_BASE_URL to http://127.0.0.1:8787 (the Headroom proxy)."
 echo "      This means all Claude Code traffic routes through Headroom, which"
 echo "      is what makes provider switching (claude-deepseek alias) work."
 echo ""
-note "Existing settings.json will be backed up to settings.json.bak before overwrite."
 note "Files written to: ~/.claude/settings.json and ~/.claude/settings.local.json"
 echo ""
 
 mkdir -p "$CLAUDE_DIR"
 
 if [ -f "$CLAUDE_DIR/settings.json" ]; then
-    action "Backing up existing settings.json → settings.json.bak"
-    cp "$CLAUDE_DIR/settings.json" "$CLAUDE_DIR/settings.json.bak"
-    ok "Backup created"
+    warn "settings.json already exists at ~/.claude/settings.json"
+    echo "  Overwriting it will replace your current Claude Code configuration."
+    echo "  A backup will be saved to settings.json.bak first, so you can restore it."
+    echo ""
+    prompt "Overwrite your existing settings.json with the Phalkon defaults? (Y/n)"
+    read -rp "  → " OVERWRITE_SETTINGS
+    if [[ ! "$OVERWRITE_SETTINGS" =~ ^[Nn]$ ]]; then
+        action "Backing up existing settings.json → settings.json.bak"
+        cp "$CLAUDE_DIR/settings.json" "$CLAUDE_DIR/settings.json.bak"
+        ok "Backup saved to ~/.claude/settings.json.bak"
+        action "Writing settings.json..."
+        cp "$SCRIPT_DIR/config/settings.json" "$CLAUDE_DIR/settings.json"
+        ok "settings.json installed"
+    else
+        warn "Skipping settings.json. Your existing config is unchanged."
+        note "To apply later: cp $SCRIPT_DIR/config/settings.json ~/.claude/settings.json"
+    fi
+else
+    action "Writing settings.json..."
+    cp "$SCRIPT_DIR/config/settings.json" "$CLAUDE_DIR/settings.json"
+    ok "settings.json installed"
 fi
 
-action "Writing settings.json..."
-cp "$SCRIPT_DIR/config/settings.json" "$CLAUDE_DIR/settings.json"
-ok "settings.json installed"
-
-action "Writing settings.local.json (Headroom proxy config)..."
-cp "$SCRIPT_DIR/config/settings.local.json" "$CLAUDE_DIR/settings.local.json"
-ok "settings.local.json installed"
+if [ -f "$CLAUDE_DIR/settings.local.json" ]; then
+    warn "settings.local.json already exists at ~/.claude/settings.local.json"
+    echo "  This file contains machine-specific overrides (e.g. a custom API base URL)."
+    echo "  The Phalkon version sets ANTHROPIC_BASE_URL to the Headroom proxy at 127.0.0.1:8787."
+    echo ""
+    prompt "Overwrite your existing settings.local.json? (Y/n)"
+    read -rp "  → " OVERWRITE_LOCAL
+    if [[ ! "$OVERWRITE_LOCAL" =~ ^[Nn]$ ]]; then
+        cp "$CLAUDE_DIR/settings.local.json" "$CLAUDE_DIR/settings.local.json.bak"
+        ok "Backup saved to ~/.claude/settings.local.json.bak"
+        action "Writing settings.local.json..."
+        cp "$SCRIPT_DIR/config/settings.local.json" "$CLAUDE_DIR/settings.local.json"
+        ok "settings.local.json installed"
+    else
+        warn "Skipping settings.local.json. Your existing overrides are unchanged."
+    fi
+else
+    action "Writing settings.local.json (Headroom proxy config)..."
+    cp "$SCRIPT_DIR/config/settings.local.json" "$CLAUDE_DIR/settings.local.json"
+    ok "settings.local.json installed"
+fi
 
 
 # ═══════════════════════════════════════════════════════════════════
