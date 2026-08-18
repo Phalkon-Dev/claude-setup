@@ -2,6 +2,8 @@
 
 > Everything installed by this setup, explained — what each tool does, when to use it, and why.
 
+**Platform note** — This guide uses bash syntax throughout. On Windows 10/11, run `.\install.ps1` instead of `bash install.sh`, and source `powershell\aliases.ps1` from `$PROFILE` instead of the bash aliases file. Everything else — alias names, Claude commands, GSD workflows, plugins — is identical across platforms.
+
 ---
 
 ## How It All Fits Together
@@ -25,6 +27,8 @@ None of this requires you to do anything differently from a normal Claude sessio
 ---
 
 ## 1. Launching Claude Code — The Aliases
+
+Claude Code is available as a web app at [claude.ai/code](https://claude.ai/code), a CLI (`npm install -g @anthropic-ai/claude-code`), and extensions for VS Code / VSCodium and JetBrains IDEs. This setup configures the CLI; the aliases below apply regardless of which interface you prefer.
 
 These are your entry points. Open a terminal and type one of these instead of `claude`.
 
@@ -90,22 +94,22 @@ RTK filters output before Claude sees it. If Claude seems to be missing context 
 
 ---
 
-## 3. Headroom — AI Provider Proxy
+## 3. Headroom — Context Compression Proxy
 
 Headroom runs silently as a local proxy. `settings.local.json` points all Claude Code traffic through it at `127.0.0.1:8787`. You don't interact with Headroom directly — the aliases handle it.
 
 ### What it gives you
 
-**Provider switching** — one alias changes where your API calls go. No config editing, no env var juggling.
+**Context compression** — Headroom intercepts every API request and compresses the context window by stripping redundant or low-value content before it is sent. This reduces token usage by 60-95% per session — longer sessions before hitting limits, lower API costs.
 
-**Usage analytics** — Headroom tracks every session's token usage and cost.
+**Provider switching** — the `claude-default` and `claude-deepseek` aliases route through Headroom to different AI providers. No config editing needed.
 
 ### If Headroom isn't running
 
 If you see API connection errors after running a `claude-*` alias, Headroom may have crashed. The aliases start it automatically via `headroom wrap`, but if something goes wrong:
 
 ```bash
-headroom version        # check it's installed
+headroom --version      # check it's installed
 headroom wrap claude    # start manually (same as the alias does)
 ```
 
@@ -205,6 +209,12 @@ Use when: you're done with a feature and want to ship it quickly.
 **`/gsd:add-tests`** — Generates tests for code you just wrote.
 Use when: you built something and haven't written tests yet.
 
+
+**Testing infrastructure prompt** (`docs/testing-infrastructure-prompt.md`) — Fill-in-the-blank prompt template for wiring the full Phalkon test stack onto any repo.
+Fill in the `CONFIG` block at the top (repo name, archetype, layout), delete the archetype sections that do not apply, then paste the rest into Claude Code from the repo root.
+Covers: Phase 0 audit (stops for confirmation), Phase 1 backend pytest with real Postgres, Phase 2 Vitest + MSW, Phase 3 openapi contract check, Phase 4 three-tier CI.
+Archetypes: `library`, `service`, `deploy`, `greenfield`.
+
 ### Memory
 
 **`/remember`** — Saves something to Claude's persistent memory.
@@ -276,11 +286,18 @@ gs           git stash
 gsp          git stash pop
 ```
 
+> **PowerShell name differences** — three aliases conflict with PS built-ins and are renamed in `powershell\aliases.ps1`:
+> - `gc` → `git-commit` (PS built-in: `Get-Content`)
+> - `gm` → `git-merge` (PS built-in: `Get-Member`)
+> - `gs` → `git-stash` (PS built-in: `Get-Service`)
+>
+> All other alias names are identical.
+
 ### Python / virtualenv
 
 ```bash
 create-venv  python3 -m venv .venv
-a            source .venv/bin/activate
+a            source .venv/bin/activate   # Windows: .\.venv\Scripts\Activate.ps1
 d            deactivate
 pip-install  pip install -r requirements.txt
 ```
@@ -376,3 +393,60 @@ claude-default
 **Check token savings weekly** — Run `rtk gain --history` on Fridays to see how much RTK saved that week. It's a good way to validate the setup is working.
 
 **Memory is per-machine** — Claude's memory (via Ruflo and `/remember`) is stored locally. If you move to a new machine, re-run the setup but note that conversation history and saved memories won't carry over.
+
+---
+
+## 10. Windows Troubleshooting
+
+**Script won't run — "running scripts is disabled on this system"**
+
+PowerShell's default execution policy blocks unsigned scripts. Fix it once with:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+Then re-run `.\install.ps1`.
+
+**Aliases not loading in new terminals**
+
+The installer appends a dot-source line to your `$PROFILE`. If aliases aren't available, check that the line exists:
+
+```powershell
+Get-Content $PROFILE
+# Should contain: . "$env:USERPROFILE\.claude\aliases.ps1"
+```
+
+If missing, add it manually:
+
+```powershell
+Add-Content $PROFILE '. "$env:USERPROFILE\.claude\aliases.ps1"'
+```
+
+**RTK download failed during install**
+
+The installer downloads RTK from GitHub Releases as a `.zip`. If it failed, try manually:
+
+```powershell
+# Check architecture first
+[System.Environment]::Is64BitOperatingSystem    # True = x64
+$env:PROCESSOR_ARCHITECTURE                      # AMD64 or ARM64
+```
+
+Download `rtk-x86_64-pc-windows-msvc.zip` (or `aarch64` for ARM64) from the RTK releases page, extract `rtk.exe`, and place it at `%USERPROFILE%\.claude\bin\rtk.exe`. Add that directory to your PATH if it is not already there.
+
+**Headroom not found after install**
+
+Headroom is a Python pip package — there is no `headroom.exe` binary. If the `headroom` command is not found:
+
+```powershell
+# Install or reinstall
+pip install "headroom-ai[all]"
+
+# If still not found, the pip Scripts directory may not be in PATH
+# Add it (replace PythonXY with your version, e.g. Python312):
+$env:PATH += ";$env:APPDATA\Python\Python312\Scripts"
+
+# Or try invoking directly via python -m
+python -m headroom --version
+```

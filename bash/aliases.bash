@@ -1,6 +1,6 @@
 # Claude Code Power User — Shell Aliases
-# Source this file from your .zshrc:
-#   source ~/.zsh_aliases  (or wherever you put this)
+# Source this file from your .bashrc:
+#   source ~/.bash_aliases  (or wherever you put this)
 
 # System
 alias ls='ls --color=auto'
@@ -15,7 +15,7 @@ alias mkdir='mkdir -p'
 alias df='df -h'
 alias du='du -h'
 alias free='free -m'
-alias reload='source ~/.zshrc'
+alias reload='source ~/.bashrc'
 
 # Git
 alias g='git'

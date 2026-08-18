@@ -52,7 +52,7 @@ echo "  on top of Claude Code. It installs and configures:"
 echo ""
 echo "    • Claude Code           — Anthropic's AI developer CLI"
 echo "    • RTK                   — reduces Claude token usage by 60–90%"
-echo "    • Headroom              — local proxy to switch between AI providers"
+echo "    • Headroom              — context compression proxy (60-95% fewer tokens)"
 echo "    • DeepSeek integration  — use DeepSeek models as a cheaper alternative"
 echo "    • Ruflo (claude-flow)   — multi-agent orchestration and memory"
 echo "    • Settings & rules      — pre-tuned config, permissions, and workflows"
@@ -300,16 +300,31 @@ echo ""
 install_rtk() {
     local INSTALL_DIR="$HOME/.local/bin"
     mkdir -p "$INSTALL_DIR"
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    local OS ARCH TRIPLE FILENAME TMP_DIR
+    OS=$(uname -s)
     ARCH=$(uname -m)
-    case "$ARCH" in
-        x86_64)   ARCH="x86_64" ;;
-        aarch64|arm64) ARCH="aarch64" ;;
-        *) warn "Unsupported architecture: $ARCH — cannot auto-install RTK."; return 1 ;;
+    case "$OS-$ARCH" in
+        Linux-x86_64)              TRIPLE="x86_64-unknown-linux-musl" ;;
+        Linux-aarch64|Linux-arm64) TRIPLE="aarch64-unknown-linux-gnu" ;;
+        Darwin-x86_64)             TRIPLE="x86_64-apple-darwin" ;;
+        Darwin-arm64|Darwin-aarch64) TRIPLE="aarch64-apple-darwin" ;;
+        *) warn "Unsupported platform: $OS $ARCH — cannot auto-install RTK."; return 1 ;;
     esac
-    action "Downloading rtk-${OS}-${ARCH} from GitHub releases..."
-    if curl -fsSL "https://github.com/rtk-ai/rtk/releases/latest/download/rtk-${OS}-${ARCH}" \
-            -o "$INSTALL_DIR/rtk"; then
+    FILENAME="rtk-${TRIPLE}.tar.gz"
+    TMP_DIR=$(mktemp -d)
+    action "Downloading ${FILENAME} from GitHub releases..."
+    if curl -fsSL "https://github.com/rtk-ai/rtk/releases/latest/download/${FILENAME}" \
+            -o "$TMP_DIR/${FILENAME}"; then
+        tar -xzf "$TMP_DIR/${FILENAME}" -C "$TMP_DIR"
+        local extracted_bin
+        extracted_bin=$(find "$TMP_DIR" -name rtk -type f | head -1)
+        if [ -z "$extracted_bin" ]; then
+            rm -rf "$TMP_DIR"
+            warn "Could not find rtk binary in downloaded archive."
+            return 1
+        fi
+        mv "$extracted_bin" "$INSTALL_DIR/rtk"
+        rm -rf "$TMP_DIR"
         chmod +x "$INSTALL_DIR/rtk"
         if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
             echo "" >> "$PROFILE_FILE"
@@ -319,6 +334,7 @@ install_rtk() {
         fi
         ok "RTK installed — $(rtk --version 2>/dev/null || echo 'version unknown')"
     else
+        rm -rf "$TMP_DIR"
         warn "Download failed. Install manually from: https://github.com/rtk-ai/rtk"
         return 1
     fi
@@ -342,52 +358,49 @@ fi
 #  STEP 6 — HEADROOM
 # ═══════════════════════════════════════════════════════════════════
 
-section "Step 6 of 13 — Headroom (AI Provider Proxy)"
+section "Step 6 of 13 — Headroom (Context Compression)"
 
-echo "  Headroom is a lightweight local proxy that sits between Claude Code and"
-echo "  the AI provider. It runs on your machine at port 8787 and intercepts"
-echo "  every API call Claude Code makes."
+echo "  Headroom is a context compression proxy. It sits between Claude Code and"
+echo "  the AI provider, intercepting every API request and compressing the context"
+echo "  window by stripping redundant content before it is sent."
 echo ""
-echo "  This gives you two superpowers:"
+echo "  This reduces token usage by 60-95% per session — meaning longer sessions"
+echo "  before hitting context limits and lower API costs."
 echo ""
-echo "    1. Provider switching — with one alias you can point Claude Code at"
-echo "       DeepSeek, OpenAI, or any OpenAI-compatible API instead of Anthropic."
-echo "       Useful when Anthropic is down, or when you want cheaper models for"
-echo "       routine tasks."
-echo ""
-echo "    2. Request analytics — Headroom tracks every call, so you can see"
-echo "       exactly how many tokens each session used and what it cost."
-echo ""
-echo "  After installation, the aliases 'claude-default' and 'claude-deepseek'"
-echo "  will be available in your shell to launch Claude Code through Headroom."
+echo "  The aliases 'claude-default' and 'claude-deepseek' launch Claude Code"
+echo "  through Headroom automatically. No manual configuration needed once installed."
 echo ""
 note "Source: https://github.com/headroomlabs-ai/headroom"
-note "Binary will be placed at: ~/.local/bin/headroom"
+note "Install: pip install \"headroom-ai[all]\"  (Python package — no binary download)"
 echo ""
 
 install_headroom() {
-    local INSTALL_DIR="$HOME/.local/bin"
-    mkdir -p "$INSTALL_DIR"
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-    ARCH=$(uname -m)
-    case "$ARCH" in
-        x86_64)   ARCH="x86_64" ;;
-        aarch64|arm64) ARCH="aarch64" ;;
-        *) warn "Unsupported architecture: $ARCH — cannot auto-install Headroom."; return 1 ;;
-    esac
-    action "Downloading headroom-${OS}-${ARCH} from GitHub releases..."
-    if curl -fsSL "https://github.com/headroomlabs-ai/headroom/releases/latest/download/headroom-${OS}-${ARCH}" \
-            -o "$INSTALL_DIR/headroom"; then
-        chmod +x "$INSTALL_DIR/headroom"
-        ok "Headroom installed — $(headroom version 2>/dev/null || headroom --version 2>/dev/null || echo 'version unknown')"
+    action "Installing headroom-ai Python package..."
+    if command -v uv >/dev/null 2>&1; then
+        action "uv detected — using: uv tool install --python 3.13 \"headroom-ai[all]\""
+        if uv tool install --python 3.13 "headroom-ai[all]"; then
+            ok "Headroom installed via uv — $(headroom --version 2>/dev/null || echo 'version unknown')"
+            return 0
+        fi
+        warn "uv install failed. Falling back to pip..."
+    fi
+    local PIP_CMD
+    PIP_CMD=$(command -v pip3 2>/dev/null || command -v pip 2>/dev/null || echo "")
+    if [ -z "$PIP_CMD" ]; then
+        warn "Neither uv nor pip found. Install Python first, then run: pip install 'headroom-ai[all]'"
+        return 1
+    fi
+    action "Using: $PIP_CMD install \"headroom-ai[all]\""
+    if "$PIP_CMD" install "headroom-ai[all]"; then
+        ok "Headroom installed — $(headroom --version 2>/dev/null || echo 'version unknown')"
     else
-        warn "Download failed. Install manually from: https://github.com/headroomlabs-ai/headroom"
+        warn "pip install failed. Install manually: pip install 'headroom-ai[all]'"
         return 1
     fi
 }
 
 if command -v headroom >/dev/null 2>&1; then
-    ok "Headroom already installed — $(headroom version 2>/dev/null || headroom --version 2>/dev/null)"
+    ok "Headroom already installed — $(headroom --version 2>/dev/null)"
 else
     prompt "Install Headroom now? (Y/n)"
     note "Required if you want to use DeepSeek or switch AI providers."

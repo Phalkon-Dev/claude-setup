@@ -12,7 +12,7 @@ A complete, reproducible Claude Code environment with token optimization, multi-
 |-------|------|--------------|
 | **Core** | Claude Code | AI-powered CLI for software development |
 | **Token savings** | RTK (Rust Token Killer) | 60–90% fewer tokens on every bash command |
-| **Provider proxy** | Headroom | Local proxy — switch between Anthropic and DeepSeek with one alias |
+| **Context compression** | Headroom | Context compression proxy — 60-95% fewer tokens per session |
 | **Cheap alternative** | DeepSeek API | Run Claude Code against DeepSeek models for routine tasks |
 | **Orchestration** | Ruflo / claude-flow | Multi-agent swarms, persistent memory, workflow hooks |
 | **Workflow** | GSD (`/gsd:*`) | Structured project planning and execution |
@@ -25,13 +25,16 @@ A complete, reproducible Claude Code environment with token optimization, multi-
 
 | Tool | Minimum version | How to install |
 |------|----------------|----------------|
-| Node.js | 18+ | [nvm](https://github.com/nvm-sh/nvm) |
-| zsh or bash | any | pre-installed on most systems |
-| Claude Code | latest | [claude.ai/download](https://claude.ai/download) |
+| Node.js | 18+ | [nvm](https://github.com/nvm-sh/nvm) (Linux/macOS) · [nodejs.org](https://nodejs.org) (Windows) |
+| Shell | any | zsh or bash (Linux/macOS) · PowerShell 5.1+ (Windows, pre-installed) |
+| Git | any | pre-installed on most systems · [git-scm.com](https://git-scm.com/download/win) (Windows) |
+| Claude Code | latest | Web: [claude.ai/code](https://claude.ai/code) · CLI: `npm install -g @anthropic-ai/claude-code` · VS Code / VSCodium / JetBrains extensions |
 
 ---
 
 ## Quick Start
+
+**Linux / macOS:**
 
 ```bash
 git clone git@github.com:Phalkon-Dev/claude-setup.git
@@ -39,7 +42,16 @@ cd claude-setup
 bash install.sh
 ```
 
-The script walks you through 13 steps, explains every tool, backs up existing files before touching them, and asks before overwriting anything.
+**Windows 10 / 11 (PowerShell):**
+
+```powershell
+git clone git@github.com:Phalkon-Dev/claude-setup.git
+cd claude-setup
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+.\install.ps1
+```
+
+Both scripts walk you through the same 13 steps, explain every tool, back up existing files before touching them, and ask before overwriting anything.
 
 ---
 
@@ -47,23 +59,46 @@ The script walks you through 13 steps, explains every tool, backs up existing fi
 
 If you already have a partial setup and only want specific pieces:
 
+**Linux / macOS:**
+
 ```bash
 CLAUDE_DIR="$HOME/.claude"
 mkdir -p "$CLAUDE_DIR"
 
 # Core config
-cp config/settings.json     "$CLAUDE_DIR/settings.json"
+cp config/settings.json       "$CLAUDE_DIR/settings.json"
 cp config/settings.local.json "$CLAUDE_DIR/settings.local.json"
-cp config/CLAUDE.md         "$CLAUDE_DIR/CLAUDE.md"
-cp config/RTK.md            "$CLAUDE_DIR/RTK.md"
-cp docs/project-workflow.md "$CLAUDE_DIR/project-workflow.md"
+cp config/CLAUDE.md           "$CLAUDE_DIR/CLAUDE.md"
+cp config/RTK.md              "$CLAUDE_DIR/RTK.md"
+cp docs/project-workflow.md   "$CLAUDE_DIR/project-workflow.md"
 
 # MCP servers
 cp config/.mcp.json "$HOME/.mcp.json"
 
 # Shell aliases (choose your shell)
-cp zsh/aliases.zsh  ~/.zsh_aliases   # zsh
+cp zsh/aliases.zsh   ~/.zsh_aliases   # zsh
 cp bash/aliases.bash ~/.bash_aliases  # bash
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$ClaudeDir = "$env:USERPROFILE\.claude"
+New-Item -ItemType Directory -Force -Path $ClaudeDir | Out-Null
+
+# Core config
+Copy-Item config\settings.json       "$ClaudeDir\settings.json"
+Copy-Item config\settings.local.json "$ClaudeDir\settings.local.json"
+Copy-Item config\CLAUDE.md           "$ClaudeDir\CLAUDE.md"
+Copy-Item config\RTK.md              "$ClaudeDir\RTK.md"
+Copy-Item docs\project-workflow.md   "$ClaudeDir\project-workflow.md"
+
+# MCP servers
+Copy-Item config\.mcp.json "$env:USERPROFILE\.mcp.json"
+
+# PowerShell aliases
+Copy-Item powershell\aliases.ps1 "$ClaudeDir\aliases.ps1"
+Add-Content -Path $PROFILE -Value ". `"$ClaudeDir\aliases.ps1`""
 ```
 
 ---
@@ -106,18 +141,33 @@ docs/
                           - Template sync workflow
                           - GSD command cheatsheet
 
+  testing-infrastructure-prompt.md
+                          Fill-in-the-blank prompt template for setting up the full Phalkon
+                          test stack on any repo (FastAPI + SQLModel + Vitest + Playwright):
+                            - Phase 0: audit checklist — stops for your confirmation
+                            - Phase 1: backend pytest (real Postgres, alembic, httpx)
+                            - Phase 2: frontend Vitest + RTL + MSW
+                            - Phase 3: openapi.json contract check + typed client
+                            - Phase 4: 3-tier CI (unit / integration / e2e)
+                          Archetype sections for library, service, deploy, greenfield.
+
 zsh/
   aliases.zsh           Shell aliases for zsh → installed to ~/.zsh_aliases
 
 bash/
   aliases.bash          Shell aliases for bash → installed to ~/.bash_aliases
+
+powershell/
+  aliases.ps1           Shell aliases for PowerShell → installed to ~/.claude/aliases.ps1
+                          Includes the same git, Python, Docker, and Claude/Headroom
+                          shortcuts as the bash version, adapted for Windows conventions.
 ```
 
 ---
 
-## Provider Switching (Headroom + DeepSeek)
+## Context Compression & Provider Switching (Headroom + DeepSeek)
 
-Headroom runs as a local proxy on port 8787. `settings.local.json` points Claude Code at it. This lets you switch AI providers with a single alias:
+Headroom runs as a context compression proxy that reduces token usage by 60-95% per session. `settings.local.json` points Claude Code at it. The aliases below also let you switch AI providers:
 
 ```bash
 claude-default           # Claude Code → Headroom → Anthropic API
@@ -213,10 +263,16 @@ Rules: always name agents, spawn all in one message, wait for results — never 
 
 **`rtk gain` fails** — you may have the wrong `rtk` binary (`reachingforthejack/rtk` is a different tool with the same name). Check `which rtk` and verify it's the token-killer version.
 
-**`claude-deepseek` not working** — Headroom must be running (`headroom version` to verify) and `DEEPSEEK_API_KEY` must be set (`source ~/.claude/deepseek_env`).
+**`claude-deepseek` not working** — Headroom must be running (`headroom --version` to verify) and `DEEPSEEK_API_KEY` must be set (`source ~/.claude/deepseek_env`).
 
 **GSD hooks not running** — hooks live in `~/.claude/hooks/`. They're installed by the `claude-code-setup` plugin. Reinstall via `/plugins` if missing.
 
 **Ruflo MCP not connecting** — run `npx ruflo@latest doctor --fix`.
 
 **Plugin not appearing** — verify `extraKnownMarketplaces` is in `settings.json`, then restart Claude Code and go to `/plugins`.
+
+**Windows: `install.ps1` won't run** — PowerShell's default execution policy blocks unsigned scripts. Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` first, then re-run the installer.
+
+**Windows: aliases not available** — the installer dot-sources `aliases.ps1` from your `$PROFILE`. If the profile wasn't created yet, run `. $PROFILE` after the installer finishes, or restart your terminal.
+
+**Windows: RTK/Headroom download fails** — try running PowerShell as Administrator, or download the `.exe` manually from the GitHub releases page and place it in `$env:USERPROFILE\.local\bin\`.
