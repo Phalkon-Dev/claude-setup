@@ -97,13 +97,17 @@ Read-Host "  Press Enter to begin, or Ctrl+C to cancel"
 section "Step 1 of 13 — Prerequisites"
 
 Write-Host "  Checking that required tools are available."
-Write-Host "  These are not installed by this script — they must already be present."
+Write-Host "  If any are missing, install them and re-run this script."
 Write-Host ""
-note "Requires: Node.js 18+, npx (ships with Node), Git for Windows"
+note "Requires: Node.js 18+, npx (ships with Node), Python 3 + pip, Git"
+Write-Host ""
+note "Install all at once (winget, pre-installed on Windows 10 1709+):"
+note "  winget install OpenJS.NodeJS.LTS Python.Python.3 Git.Git"
+note "Then restart PowerShell so PATH updates take effect."
 Write-Host ""
 
 if (!(Get-Command node -ErrorAction SilentlyContinue)) {
-    fail "Node.js not found. Install it from https://nodejs.org/ or via winget: winget install OpenJS.NodeJS"
+    fail "Node.js not found. Run: winget install OpenJS.NodeJS.LTS  (or download from https://nodejs.org/)"
 }
 if (!(Get-Command npx -ErrorAction SilentlyContinue)) {
     fail "npx not found. It ships with Node.js — try reinstalling Node."
@@ -111,16 +115,37 @@ if (!(Get-Command npx -ErrorAction SilentlyContinue)) {
 
 $nodeVer = (node -e "process.stdout.write(process.version.slice(1).split('.')[0])") -as [int]
 if ($nodeVer -lt 18) {
-    fail "Node.js 18+ required. You have: $(node --version). Upgrade from https://nodejs.org/"
+    fail "Node.js 18+ required. You have: $(node --version). Run: winget install OpenJS.NodeJS.LTS"
 }
 
 if (!(Get-Command git -ErrorAction SilentlyContinue)) {
-    fail "Git not found. Install Git for Windows from https://git-scm.com/download/win"
+    fail "Git not found. Run: winget install Git.Git  (or download from https://git-scm.com/download/win)"
 }
 
 ok "Node.js $(node --version)"
 ok "npx available"
 ok "Git $(git --version)"
+
+# Python is needed by Headroom. Warn early if missing.
+$pythonCmd = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" }
+             elseif (Get-Command python -ErrorAction SilentlyContinue) { "python" }
+             else { $null }
+$pipCmd = if (Get-Command pip3 -ErrorAction SilentlyContinue) { "pip3" }
+          elseif (Get-Command pip -ErrorAction SilentlyContinue) { "pip" }
+          else { $null }
+
+if (-not $pythonCmd) {
+    warn "Python 3 not found. Headroom install (Step 8) will be skipped."
+    note "Install: winget install Python.Python.3  (then restart PowerShell)"
+    note "         or download from https://python.org/downloads — check 'Add Python to PATH'"
+} elseif (-not $pipCmd) {
+    warn "pip not found. Headroom install (Step 8) will be skipped."
+    note "Fix: $pythonCmd -m ensurepip --upgrade"
+} else {
+    $pyVer = (& $pythonCmd --version 2>&1) -replace "Python ", ""
+    ok "Python $pyVer"
+    ok "pip available"
+}
 
 
 # ═════════════════════════════════════════════════════════════════════════════

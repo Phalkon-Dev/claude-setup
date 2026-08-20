@@ -6,6 +6,82 @@
 
 ---
 
+## 0. Installing Dependencies
+
+Before running `install.sh` or `install.ps1`, verify the following are present:
+
+| Tool | Minimum | Required by |
+|------|---------|------------|
+| Node.js | 18+ | Claude Code (and GSD, which runs inside Claude Code) |
+| npm / npx | ships with Node | Claude Code install, plugin resolution |
+| Python 3 + pip | 3.9+ | Headroom (`pip install "headroom-ai[all]"`) |
+| Git | any | cloning this repo, commit aliases |
+
+### Ubuntu / Debian
+
+```bash
+# Node.js 20 LTS (choose one)
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt-get install -y nodejs
+# or via nvm (no sudo required):
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+source ~/.bashrc && nvm install --lts
+
+# Python 3 + pip, git, curl
+sudo apt-get install -y python3 python3-pip git curl
+```
+
+### Fedora / RHEL / CentOS
+
+```bash
+# Node.js 20 LTS (choose one)
+curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+sudo dnf install -y nodejs
+# or via nvm:
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+source ~/.bashrc && nvm install --lts
+
+# Python 3 + pip, git, curl
+sudo dnf install -y python3 python3-pip git curl
+```
+
+### macOS
+
+```bash
+# Homebrew (if not installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Node.js, Python, Git
+brew install node python
+xcode-select --install   # installs git + command-line tools
+
+# Or use nvm for Node.js:
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+source ~/.zshrc && nvm install --lts
+```
+
+### Windows 10 / 11 (PowerShell)
+
+```powershell
+# All three via winget (pre-installed on modern Windows)
+winget install OpenJS.NodeJS.LTS   # Node.js 20 LTS + npm/npx
+winget install Python.Python.3     # Python 3 + pip
+winget install Git.Git             # Git for Windows
+
+# Restart PowerShell after — PATH doesn't update in the current session
+```
+
+Manual installers if winget is unavailable:
+- Node.js LTS `.msi`: [nodejs.org/en/download](https://nodejs.org/en/download) — check "Add to PATH"
+- Python `.exe`: [python.org/downloads](https://python.org/downloads) — check "Add Python to PATH"
+- Git: [git-scm.com/download/win](https://git-scm.com/download/win)
+
+### About GSD and Node.js
+
+GSD (`/gsd:*` commands) is installed as part of the `claude-code-setup` plugin inside Claude Code. It does not require a separate Node.js install — it runs entirely within Claude Code, which already requires Node.js 18+. Once Node.js is installed for Claude Code, GSD will work without any additional setup.
+
+---
+
 ## How It All Fits Together
 
 When you run `claude-default` or `claude-deepseek`, this is what happens:

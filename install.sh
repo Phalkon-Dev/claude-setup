@@ -129,21 +129,45 @@ ok "Shell: $SHELL_TYPE | Config: $PROFILE_FILE | Aliases: $ALIASES_FILE"
 section "Step 1 of 13 — Prerequisites"
 
 echo "  Checking that the required system tools are available."
-echo "  These are not installed by this script — they must already be present."
+echo "  If any are missing, see the install guide below before re-running."
 echo ""
-note "Requires: Node.js 18+, npx (ships with Node), zsh"
+note "Requires: Node.js 18+, npx (ships with Node), Python 3 + pip, Git"
+echo ""
+note "Install guide:"
+note "  Ubuntu/Debian : sudo apt-get install -y nodejs python3 python3-pip git curl"
+note "                  (or Node via nvm: curl -o- https://github.com/nvm-sh/nvm/raw/HEAD/install.sh | bash)"
+note "  Fedora/RHEL   : sudo dnf install -y nodejs python3 python3-pip git curl"
+note "  macOS         : brew install node python  &&  xcode-select --install"
+note "  Windows       : winget install OpenJS.NodeJS.LTS Python.Python.3 Git.Git"
 echo ""
 
 command -v node >/dev/null 2>&1 \
-    || fail "Node.js not found. Install it via nvm: https://github.com/nvm-sh/nvm"
+    || fail "Node.js not found. Install via nvm (https://github.com/nvm-sh/nvm) or your OS package manager."
 command -v npx >/dev/null 2>&1 \
     || fail "npx not found. It ships with Node.js — try reinstalling Node."
 
 NODE_VER=$(node -e "process.exit(parseInt(process.version.slice(1)) < 18 ? 1 : 0)" 2>/dev/null && echo "ok" || echo "old")
-[ "$NODE_VER" = "old" ] && fail "Node.js 18+ required. You have: $(node --version). Upgrade via nvm."
+[ "$NODE_VER" = "old" ] && fail "Node.js 18+ required. You have: $(node --version). Upgrade via nvm or nodejs.org."
 
 ok "Node.js $(node --version)"
 ok "npx available"
+
+# Python is needed by Headroom (pip install "headroom-ai[all]"). Warn early if missing.
+PYTHON_CMD=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
+PIP_CMD=$(command -v pip3 2>/dev/null || command -v pip 2>/dev/null || echo "")
+if [ -z "$PYTHON_CMD" ]; then
+    warn "Python 3 not found. Headroom install (Step 8) will be skipped."
+    note "Install: sudo apt-get install -y python3 python3-pip  (Ubuntu/Debian)"
+    note "         sudo dnf install -y python3 python3-pip  (Fedora/RHEL)"
+    note "         brew install python  (macOS)"
+elif [ -z "$PIP_CMD" ]; then
+    warn "pip not found. Headroom install (Step 8) will be skipped."
+    note "Install: sudo apt-get install -y python3-pip  (Ubuntu/Debian)"
+    note "         python3 -m ensurepip --upgrade  (most systems)"
+else
+    ok "Python $($PYTHON_CMD --version 2>&1 | awk '{print $2}')"
+    ok "pip available"
+fi
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -23,12 +23,98 @@ A complete, reproducible Claude Code environment with token optimization, multi-
 
 ## Prerequisites
 
-| Tool | Minimum version | How to install |
-|------|----------------|----------------|
-| Node.js | 18+ | [nvm](https://github.com/nvm-sh/nvm) (Linux/macOS) · [nodejs.org](https://nodejs.org) (Windows) |
-| Shell | any | zsh or bash (Linux/macOS) · PowerShell 5.1+ (Windows, pre-installed) |
-| Git | any | pre-installed on most systems · [git-scm.com](https://git-scm.com/download/win) (Windows) |
-| Claude Code | latest | Web: [claude.ai/code](https://claude.ai/code) · CLI: `npm install -g @anthropic-ai/claude-code` · VS Code / VSCodium / JetBrains extensions |
+| Tool | Minimum version | Required by | How to install |
+|------|----------------|------------|----------------|
+| Node.js | 18+ | Claude Code, GSD | [nvm](https://github.com/nvm-sh/nvm) (Linux/macOS) · [nodejs.org](https://nodejs.org) (Windows) |
+| Python 3 + pip | 3.9+ | Headroom | pre-installed on most systems · see install guide below |
+| Git | any | repo clone, aliases | pre-installed on Linux/macOS · [git-scm.com](https://git-scm.com/download/win) (Windows) |
+| Shell | any | install script | zsh or bash (Linux/macOS) · PowerShell 5.1+ (Windows, pre-installed) |
+| Claude Code | latest | everything | Web: [claude.ai/code](https://claude.ai/code) · CLI: `npm install -g @anthropic-ai/claude-code` · VS Code / VSCodium / JetBrains extensions |
+
+### Installing Dependencies
+
+<details>
+<summary><strong>Ubuntu / Debian</strong></summary>
+
+```bash
+# Node.js 20 LTS via NodeSource
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Or use nvm (recommended — no sudo needed)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+source ~/.bashrc   # or ~/.zshrc
+nvm install --lts
+
+# Python 3 + pip (usually pre-installed)
+sudo apt-get install -y python3 python3-pip
+
+# Git + curl
+sudo apt-get install -y git curl
+```
+
+</details>
+
+<details>
+<summary><strong>Fedora / RHEL / CentOS</strong></summary>
+
+```bash
+# Node.js via NodeSource
+curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+sudo dnf install -y nodejs
+
+# Or use nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+source ~/.bashrc
+nvm install --lts
+
+# Python 3 + pip
+sudo dnf install -y python3 python3-pip
+
+# Git + curl
+sudo dnf install -y git curl
+```
+
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+```bash
+# Install Homebrew first (if not present)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Node.js (via Homebrew or nvm)
+brew install node
+# Or: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+
+# Python 3 (macOS 12.3+ ships Python 3; brew version if you need pip)
+brew install python
+
+# Git (pre-installed with Xcode CLI)
+xcode-select --install   # one-time, if not already installed
+```
+
+</details>
+
+<details>
+<summary><strong>Windows 10 / 11</strong></summary>
+
+```powershell
+# Using winget (recommended, pre-installed on Windows 10 1709+)
+winget install OpenJS.NodeJS.LTS    # Node.js 20 LTS
+winget install Python.Python.3      # Python 3 + pip
+winget install Git.Git              # Git for Windows
+
+# After install, restart PowerShell so PATH updates take effect
+```
+
+Or download installers manually:
+- Node.js: [nodejs.org/en/download](https://nodejs.org/en/download) — use the LTS `.msi`
+- Python: [python.org/downloads](https://python.org/downloads) — check "Add Python to PATH"
+- Git: [git-scm.com/download/win](https://git-scm.com/download/win)
+
+</details>
 
 ---
 
