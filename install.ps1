@@ -97,20 +97,46 @@ Read-Host "  Press Enter to begin, or Ctrl+C to cancel"
 section "Step 1 of 13 — Prerequisites"
 
 Write-Host "  Checking that required tools are available."
-Write-Host "  If any are missing, install them and re-run this script."
-Write-Host ""
-note "Requires: Node.js 18+, npx (ships with Node), Python 3 + pip, Git"
-Write-Host ""
-note "Install all at once (winget, pre-installed on Windows 10 1709+):"
-note "  winget install OpenJS.NodeJS.LTS Python.Python.3 Git.Git"
-note "Then restart PowerShell so PATH updates take effect."
+Write-Host "  Missing tools will be offered for automatic installation."
 Write-Host ""
 
-if (!(Get-Command node -ErrorAction SilentlyContinue)) {
-    fail "Node.js not found. Run: winget install OpenJS.NodeJS.LTS  (or download from https://nodejs.org/)"
+# Check winget availability once upfront
+$script:hasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+if (-not $script:hasWinget) {
+    warn "winget not found (ships with Windows 10 1709+ via App Installer)."
+    note "Get it: ms-windows-store://pdp/?productid=9NBLGGH4NNS1"
+    note "Missing tools must be installed manually if winget is unavailable."
+    Write-Host ""
 }
+
+function Install-IfMissing($label, $cmd, $wingetId, $fallbackUrl) {
+    if (Get-Command $cmd -ErrorAction SilentlyContinue) { return }
+    warn "$label is not installed."
+    if (-not $script:hasWinget) {
+        note "Install manually: $fallbackUrl"
+        fail "Install $label, restart PowerShell, and re-run this script."
+    }
+    prompt_ "Install $label now? [Y/n]"
+    $ans = Read-Host "  -> "
+    if ([string]::IsNullOrWhiteSpace($ans) -or $ans -match '^[Yy]') {
+        action "winget install --id $wingetId -e --source winget"
+        winget install --id $wingetId -e --source winget
+        if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
+            warn "$label installed but not yet in PATH."
+            note "Restart PowerShell and re-run this script."
+            fail "PATH not updated — restart required."
+        }
+    } else {
+        note "Skipped. Install manually: winget install --id $wingetId -e"
+        fail "Install $label and re-run this script."
+    }
+}
+
+Install-IfMissing "Node.js" "node" "OpenJS.NodeJS.LTS" "https://nodejs.org/"
+Install-IfMissing "Git"     "git"  "Git.Git"           "https://git-scm.com/download/win"
+
 if (!(Get-Command npx -ErrorAction SilentlyContinue)) {
-    fail "npx not found. It ships with Node.js — try reinstalling Node."
+    fail "npx not found — it ships with Node.js, try reinstalling Node."
 }
 
 $nodeVer = (node -e "process.stdout.write(process.version.slice(1).split('.')[0])") -as [int]
@@ -118,15 +144,11 @@ if ($nodeVer -lt 18) {
     fail "Node.js 18+ required. You have: $(node --version). Run: winget install OpenJS.NodeJS.LTS"
 }
 
-if (!(Get-Command git -ErrorAction SilentlyContinue)) {
-    fail "Git not found. Run: winget install Git.Git  (or download from https://git-scm.com/download/win)"
-}
-
 ok "Node.js $(node --version)"
 ok "npx available"
 ok "Git $(git --version)"
 
-# Python is needed by Headroom. Warn early if missing.
+# Python: needed by Headroom — offer auto-install, but don't hard-fail if missing
 $pythonCmd = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" }
              elseif (Get-Command python -ErrorAction SilentlyContinue) { "python" }
              else { $null }
@@ -136,12 +158,34 @@ $pipCmd = if (Get-Command pip3 -ErrorAction SilentlyContinue) { "pip3" }
 
 if (-not $pythonCmd) {
     warn "Python 3 not found. Headroom install (Step 8) will be skipped."
-    note "Install: winget install Python.Python.3  (then restart PowerShell)"
-    note "         or download from https://python.org/downloads — check 'Add Python to PATH'"
+    if ($script:hasWinget) {
+        prompt_ "Install Python 3 now? [Y/n]"
+        $ans = Read-Host "  -> "
+        if ([string]::IsNullOrWhiteSpace($ans) -or $ans -match '^[Yy]') {
+            action "winget install --id Python.Python.3.13 -e --source winget"
+            winget install --id Python.Python.3.13 -e --source winget
+            $pythonCmd = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" }
+                         elseif (Get-Command python -ErrorAction SilentlyContinue) { "python" }
+                         else { $null }
+            if (-not $pythonCmd) {
+                note "Python installed — restart PowerShell and re-run for Headroom setup."
+            }
+        }
+    } else {
+        note "Install from: https://python.org/downloads — check 'Add Python to PATH'"
+    }
 } elseif (-not $pipCmd) {
-    warn "pip not found. Headroom install (Step 8) will be skipped."
-    note "Fix: $pythonCmd -m ensurepip --upgrade"
-} else {
+    action "Trying $pythonCmd -m ensurepip --upgrade ..."
+    & $pythonCmd -m ensurepip --upgrade 2>$null
+    $pipCmd = if (Get-Command pip3 -ErrorAction SilentlyContinue) { "pip3" }
+              elseif (Get-Command pip -ErrorAction SilentlyContinue) { "pip" }
+              else { $null }
+    if (-not $pipCmd) {
+        warn "pip still not found. Headroom install (Step 8) will be skipped."
+    }
+}
+
+if ($pythonCmd -and $pipCmd) {
     $pyVer = (& $pythonCmd --version 2>&1) -replace "Python ", ""
     ok "Python $pyVer"
     ok "pip available"

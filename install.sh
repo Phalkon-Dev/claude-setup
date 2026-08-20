@@ -129,41 +129,109 @@ ok "Shell: $SHELL_TYPE | Config: $PROFILE_FILE | Aliases: $ALIASES_FILE"
 section "Step 1 of 13 — Prerequisites"
 
 echo "  Checking that the required system tools are available."
-echo "  If any are missing, see the install guide below before re-running."
-echo ""
-note "Requires: Node.js 18+, npx (ships with Node), Python 3 + pip, Git"
-echo ""
-note "Install guide:"
-note "  Ubuntu/Debian : sudo apt-get install -y nodejs python3 python3-pip git curl"
-note "                  (or Node via nvm: curl -o- https://github.com/nvm-sh/nvm/raw/HEAD/install.sh | bash)"
-note "  Fedora/RHEL   : sudo dnf install -y nodejs python3 python3-pip git curl"
-note "  macOS         : brew install node python  &&  xcode-select --install"
-note "  Windows       : winget install OpenJS.NodeJS.LTS Python.Python.3 Git.Git"
+echo "  Missing tools will be offered for automatic installation."
 echo ""
 
-command -v node >/dev/null 2>&1 \
-    || fail "Node.js not found. Install via nvm (https://github.com/nvm-sh/nvm) or your OS package manager."
-command -v npx >/dev/null 2>&1 \
-    || fail "npx not found. It ships with Node.js — try reinstalling Node."
+# Detect OS and distro family for auto-install commands
+_SYS=$(uname -s)
+_DISTRO=""
+if [ "$_SYS" = "Linux" ] && [ -f /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    case "${ID_LIKE:-} ${ID:-}" in
+        *debian*|*ubuntu*) _DISTRO="debian" ;;
+        *fedora*|*rhel*|*centos*) _DISTRO="fedora" ;;
+        *arch*) _DISTRO="arch" ;;
+    esac
+fi
+
+# Usage: _install_dep "Label" "apt-pkgs" "dnf-pkgs" "brew-formula" ["extra hint"]
+_install_dep() {
+    local label="$1" apt_pkg="$2" dnf_pkg="$3" brew_pkg="$4" extra_note="${5:-}"
+    warn "$label is not installed."
+    [ -n "$extra_note" ] && note "  Tip: $extra_note"
+    prompt "Install $label now? [Y/n]"
+    local _ans
+    read -r _ans </dev/tty
+    case "${_ans:-y}" in
+        [Nn]*) note "Skipped."; echo ""; fail "Install $label and re-run this script." ;;
+    esac
+    case "$_SYS-$_DISTRO" in
+        Linux-debian)
+            action "sudo apt-get install -y $apt_pkg"
+            sudo apt-get update -qq && sudo apt-get install -y $apt_pkg ;;
+        Linux-fedora)
+            action "sudo dnf install -y $dnf_pkg"
+            sudo dnf install -y $dnf_pkg 2>/dev/null || sudo yum install -y $dnf_pkg ;;
+        Linux-arch)
+            action "sudo pacman -S --noconfirm $brew_pkg"
+            sudo pacman -S --noconfirm $brew_pkg ;;
+        Darwin-*)
+            if ! command -v brew >/dev/null 2>&1; then
+                warn "Homebrew not found — required to install $label on macOS."
+                note "Install Homebrew: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+                fail "Re-run this script after installing Homebrew."
+            fi
+            action "brew install $brew_pkg"
+            brew install "$brew_pkg" ;;
+        *)
+            warn "Cannot auto-install on this OS. Install $label manually and re-run."
+            exit 1 ;;
+    esac
+}
+
+# ── Node.js ───────────────────────────────────────────────────────
+if ! command -v node >/dev/null 2>&1; then
+    _install_dep "Node.js" "nodejs" "nodejs" "node" \
+        "nvm is recommended: curl -o- https://github.com/nvm-sh/nvm/raw/HEAD/install.sh | bash"
+    command -v node >/dev/null 2>&1 || fail "Node.js still not found. Restart your shell and re-run."
+fi
 
 NODE_VER=$(node -e "process.exit(parseInt(process.version.slice(1)) < 18 ? 1 : 0)" 2>/dev/null && echo "ok" || echo "old")
-[ "$NODE_VER" = "old" ] && fail "Node.js 18+ required. You have: $(node --version). Upgrade via nvm or nodejs.org."
+if [ "$NODE_VER" = "old" ]; then
+    warn "Node.js 18+ required. You have: $(node --version)."
+    note "Upgrade via nvm:  nvm install 18 && nvm use 18"
+    fail "Upgrade Node.js and re-run this script."
+fi
+
+command -v npx >/dev/null 2>&1 || fail "npx not found — it ships with Node.js, try reinstalling Node."
 
 ok "Node.js $(node --version)"
 ok "npx available"
 
-# Python is needed by Headroom (pip install "headroom-ai[all]"). Warn early if missing.
+# ── Git ───────────────────────────────────────────────────────────
+if ! command -v git >/dev/null 2>&1; then
+    _install_dep "Git" "git" "git" "git"
+    command -v git >/dev/null 2>&1 || fail "Git still not found. Restart your shell and re-run."
+fi
+ok "Git $(git --version | awk '{print $3}')"
+
+# ── curl ─────────────────────────────────────────────────────────
+if ! command -v curl >/dev/null 2>&1; then
+    _install_dep "curl" "curl" "curl" "curl"
+    command -v curl >/dev/null 2>&1 || fail "curl still not found. Restart your shell and re-run."
+fi
+ok "curl available"
+
+# ── Python + pip ──────────────────────────────────────────────────
 PYTHON_CMD=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
-PIP_CMD=$(command -v pip3 2>/dev/null || command -v pip 2>/dev/null || echo "")
 if [ -z "$PYTHON_CMD" ]; then
-    warn "Python 3 not found. Headroom install (Step 8) will be skipped."
-    note "Install: sudo apt-get install -y python3 python3-pip  (Ubuntu/Debian)"
-    note "         sudo dnf install -y python3 python3-pip  (Fedora/RHEL)"
-    note "         brew install python  (macOS)"
+    _install_dep "Python 3" "python3 python3-pip" "python3 python3-pip" "python"
+    PYTHON_CMD=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
+fi
+
+PIP_CMD=$(command -v pip3 2>/dev/null || command -v pip 2>/dev/null || echo "")
+if [ -n "$PYTHON_CMD" ] && [ -z "$PIP_CMD" ]; then
+    action "Trying $PYTHON_CMD -m ensurepip --upgrade ..."
+    "$PYTHON_CMD" -m ensurepip --upgrade 2>/dev/null || true
+    PIP_CMD=$(command -v pip3 2>/dev/null || command -v pip 2>/dev/null || echo "")
+fi
+
+if [ -z "$PYTHON_CMD" ]; then
+    warn "Python 3 not available. Headroom install (Step 8) will be skipped."
 elif [ -z "$PIP_CMD" ]; then
-    warn "pip not found. Headroom install (Step 8) will be skipped."
-    note "Install: sudo apt-get install -y python3-pip  (Ubuntu/Debian)"
-    note "         python3 -m ensurepip --upgrade  (most systems)"
+    warn "pip not available. Headroom install (Step 8) will be skipped."
+    note "Fix: $PYTHON_CMD -m ensurepip --upgrade"
 else
     ok "Python $($PYTHON_CMD --version 2>&1 | awk '{print $2}')"
     ok "pip available"
