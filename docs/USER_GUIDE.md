@@ -8,7 +8,9 @@
 
 ## 0. Installing Dependencies
 
-Before running `install.sh` or `install.ps1`, verify the following are present:
+The install scripts detect missing prerequisites and offer to install them automatically (with a [Y/n] prompt per tool). If you prefer to install manually first, the per-OS commands are listed below.
+
+The scripts check for:
 
 | Tool | Minimum | Required by |
 |------|---------|------------|

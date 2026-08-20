@@ -31,7 +31,10 @@ A complete, reproducible Claude Code environment with token optimization, multi-
 | Shell | any | install script | zsh or bash (Linux/macOS) · PowerShell 5.1+ (Windows, pre-installed) |
 | Claude Code | latest | everything | Web: [claude.ai/code](https://claude.ai/code) · CLI: `npm install -g @anthropic-ai/claude-code` · VS Code / VSCodium / JetBrains extensions |
 
-### Installing Dependencies
+### Installing Dependencies (auto-detected)
+
+The install scripts detect missing prerequisites and offer to install them automatically.
+If you prefer to install manually before running the script, expand the section for your OS below.
 
 <details>
 <summary><strong>Ubuntu / Debian</strong></summary>
